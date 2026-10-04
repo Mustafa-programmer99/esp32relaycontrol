@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ESP32 Relay Control Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #e8ecf0;
+      --surface: #f8fafb;
+      --ink: #14202b;
+      --muted: #5d6c7a;
+      --line: #d3dae1;
+      --steel: #24506f;
+      --steel-dark: #193a52;
+      --amber: #f0a20f;
+      --amber-soft: #fff4dc;
+      --danger: #b93628;
+      --danger-dark: #962a1e;
+      --radius: 18px;
+      --font-display: "Bricolage Grotesque", "Segoe UI", Arial, sans-serif;
+      --font-body: "DM Sans", "Segoe UI", Arial, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 50% -200px, #f6f9fb 0%, transparent 70%),
+        var(--bg);
+      padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
+      line-height: 1.5;
+    }
+    :focus-visible { outline: 3px solid var(--steel); outline-offset: 3px; }
+
+    /* Header */
+    .topbar {
+      width: 100%;
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: clamp(24px, 5vw, 48px) clamp(16px, 4vw, 32px) 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .mark {
+      flex: none;
+      width: 44px; height: 44px;
+      border-radius: 13px;
+      background: var(--steel-dark);
+      display: grid; place-items: center;
+      box-shadow: 0 6px 16px rgba(25,58,82,.28);
+    }
+    .mark svg { width: 24px; height: 24px; }
+    h1 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: clamp(1.35rem, 3.6vw, 2rem);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      text-align: left;
+    }
+
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: clamp(24px, 5vw, 44px) clamp(16px, 4vw, 32px);
+    }
+
+    /* Login */
+    #loginForm {
+      max-width: 420px;
+      margin: clamp(8px, 6vh, 56px) auto 0;
+      background: var(--surface);
+      padding: clamp(24px, 5vw, 36px);
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 2px rgba(20,32,43,.05), 0 24px 48px -24px rgba(20,32,43,.25);
+      animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
+    }
+    #loginForm .intro { margin: 0 0 22px; color: var(--muted); font-size: .95rem; }
+    .field { display: block; margin-bottom: 16px; }
+    .field span { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 6px; }
+    #loginForm input {
+      width: 100%;
+      padding: 13px 14px;
+      font: inherit;
+      font-size: 1rem;
+      color: var(--ink);
+      background: #fff;
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #loginForm input::placeholder { color: #8d9aa6; }
+    #loginForm input:hover { border-color: #b7c2cc; }
+    #loginForm input:focus {
+      outline: none;
+      border-color: var(--steel);
+      box-shadow: 0 0 0 4px rgba(36,80,111,.15);
+    }
+    #loginForm button {
+      width: 100%;
+      margin-top: 6px;
+      padding: 14px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 1rem;
+      color: #fff;
+      background: var(--steel);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background-color .2s, transform .1s, box-shadow .2s;
+      box-shadow: 0 8px 18px -8px rgba(36,80,111,.7);
+    }
+    #loginForm button:hover { background: var(--steel-dark); }
+    #loginForm button:active { transform: translateY(1px); }
+    #loginForm button:disabled { opacity: .65; cursor: progress; }
+
+    /* Dashboard */
+    #dashboard { display: none; }
+    .summary {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .summary strong { font-family: var(--font-display); font-size: 1.15rem; letter-spacing: -.01em; }
+    .summary span { color: var(--muted); font-size: .95rem; }
+
+    .relay-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+    }
+    .relay-card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: hidden;
+      transition: border-color .3s, box-shadow .3s, background-color .3s;
+      box-shadow: 0 1px 2px rgba(20,32,43,.05);
+    }
+    .relay-card::before {
+      content: "";
+      position: absolute; inset: 0 0 auto 0; height: 4px;
+      background: var(--line);
+      transition: background-color .3s;
+    }
+    .relay-card.on {
+      background: linear-gradient(180deg, var(--amber-soft), var(--surface) 70%);
+      border-color: #efc66d;
+      box-shadow: 0 18px 36px -22px rgba(240,162,15,.7);
+    }
+    .relay-card.on::before { background: var(--amber); }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .relay-card h2 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      letter-spacing: -.01em;
+    }
+    .led {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #b6c0ca;
+      transition: background-color .3s, box-shadow .3s;
+    }
+    .relay-card.on .led { background: var(--amber); box-shadow: 0 0 0 5px rgba(240,162,15,.22), 0 0 14px rgba(240,162,15,.8); }
+    .relay-card p { margin: 0; color: var(--muted); font-size: .95rem; }
+    .relay-card p span { color: var(--ink); font-weight: 700; margin-left: 2px; }
+
+    .relay-card button {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 8px 8px 16px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--ink);
+      background: #fff;
+      border: 1.5px solid var(--line);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: border-color .2s, background-color .2s, transform .1s;
+    }
+    .relay-card button:hover { border-color: var(--steel); }
+    .relay-card button:active { transform: scale(.985); }
+    .relay-card.on button { border-color: #e6b954; }
+    .track {
+      flex: none;
+      width: 54px; height: 32px;
+      border-radius: 99px;
+      background: #c3cdd6;
+      position: relative;
+      transition: background-color .3s;
+    }
+    .track::after {
+      content: "";
+      position: absolute; top: 4px; left: 4px;
+      width: 24px; height: 24px; border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 5px rgba(20,32,43,.3);
+      transition: transform .3s cubic-bezier(.3,1.4,.5,1);
+    }
+    .relay-card.on .track { background: var(--amber); }
+    .relay-card.on .track::after { transform: translateX(22px); }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 28px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+    }
+    #allOffBtn, #logoutBtn {
+      flex: 1;
+      max-width: 240px;
+      padding: 13px 22px;
+      font: inherit;
+      font-weight: 600;
+      font-size: 1rem;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background-color .2s, transform .1s, border-color .2s;
+    }
+    #allOffBtn { color: #fff; background: var(--danger); border: 1.5px solid var(--danger); }
+    #allOffBtn:hover { background: var(--danger-dark); border-color: var(--danger-dark); }
+    #logoutBtn { color: var(--ink); background: transparent; border: 1.5px solid #b7c2cc; }
+    #logoutBtn:hover { background: #fff; border-color: var(--ink); }
+    #allOffBtn:active, #logoutBtn:active { transform: translateY(1px); }
+
+    footer {
+      text-align: center;
+      font-size: .9rem;
+      color: var(--muted);
+      padding: 20px 16px 28px;
+    }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+    @media (max-width: 700px) {
+      .relay-container { grid-template-columns: 1fr; gap: 12px; }
+      .relay-card { padding: 18px; }
+      .actions { flex-direction: column-reverse; }
+      #allOffBtn, #logoutBtn { max-width: none; width: 100%; }
+    }
+    @media (min-width: 701px) and (max-width: 960px) {
+      .relay-container { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 961px) {
+      .relay-container { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (min-width: 1500px) {
+      html { font-size: 17.5px; }
+      .topbar, main { max-width: 1200px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#f0a20f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+    </div>
+    <h1>ESP32 Relay Control Dashboard</h1>
+  </header>
+
+  <main>
+    <!-- Login form -->
+    <div id="loginForm">
+      <p class="intro">Sign in to control your relays.</p>
+      <label class="field"><span>Email</span>
+        <input type="email" id="email" placeholder="Enter Email" autocomplete="username" required />
+      </label>
+      <label class="field"><span>Password</span>
+        <input type="password" id="password" placeholder="Enter Password" autocomplete="current-password" required />
+      </label>
+      <button id="loginBtn">Login</button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard">
+      <div class="summary" aria-live="polite">
+        <strong>Relays</strong>
+        <span id="summaryText">Loading...</span>
+      </div>
+
+      <div class="relay-container">
+        <div class="relay-card" id="card1">
+          <div class="card-head"><h2>Relay 1</h2><i class="led" aria-hidden="true"></i></div>
+          <p>Status: <span id="status1">Loading...</span></p>
+          <button id="btn1" role="switch" aria-checked="false" aria-label="Toggle Relay 1">Toggle<i class="track" aria-hidden="true"></i></button>
+        </div>
+
+        <div class="relay-card" id="card2">
+          <div class="card-head"><h2>Relay 2</h2><i class="led" aria-hidden="true"></i></div>
+          <p>Status: <span id="status2">Loading...</span></p>
+          <button id="btn2" role="switch" aria-checked="false" aria-label="Toggle Relay 2">Toggle<i class="track" aria-hidden="true"></i></button>
+        </div>
+
+        <div class="relay-card" id="card3">
+          <div class="card-head"><h2>Relay 3</h2><i class="led" aria-hidden="true"></i></div>
+          <p>Status: <span id="status3">Loading...</span></p>
+          <button id="btn3" role="switch" aria-checked="false" aria-label="Toggle Relay 3">Toggle<i class="track" aria-hidden="true"></i></button>
+        </div>
+
+        <div class="relay-card" id="card4">
+          <div class="card-head"><h2>Relay 4</h2><i class="led" aria-hidden="true"></i></div>
+          <p>Status: <span id="status4">Loading...</span></p>
+          <button id="btn4" role="switch" aria-checked="false" aria-label="Toggle Relay 4">Toggle<i class="track" aria-hidden="true"></i></button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="allOffBtn">All OFF</button>
+        <button id="logoutBtn">Logout</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Created by Tech StudyCell
+  </footer>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+
+  <script>
+    // Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyAn3j_GxAdAIoBQZ-jfw1zUM-_ARplszF8",
+  authDomain: "esp32relaycontrol-1af63.firebaseapp.com",
+  databaseURL: "https://esp32relaycontrol-1af63-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "esp32relaycontrol-1af63",
+  storageBucket: "esp32relaycontrol-1af63.firebasestorage.app",
+  messagingSenderId: "309341307276",
+  appId: "1:309341307276:web:8ecee304c559fd860916a9"
+};
+
+    firebase.initializeApp(firebaseConfig);
+
+    // Predefined login credentials (can be replaced with your logic)
+    const allowedEmail = "mustafaabdullayev213@gmail.com";
+    const allowedPassword = "mmmm0987";
+
+    const loginForm = document.getElementById("loginForm");
+    const dashboard = document.getElementById("dashboard");
+    const loginBtn = document.getElementById("loginBtn");
+
+    function doLogin() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      if (!email || !password) {
+        alert("Please enter email and password.");
+        return;
+      }
+
+      // Check hardcoded credentials first
+      if(email === allowedEmail && password === allowedPassword){
+        loginBtn.disabled = true;
+        // Sign in with Firebase
+        firebase.auth().signInWithEmailAndPassword(email, password)
+          .then(userCredential => {
+            console.log("Signed in as", userCredential.user.email);
+            loginForm.style.display = "none";
+            dashboard.style.display = "block";
+            loginBtn.disabled = false;
+            startRelayControl();
+          })
+          .catch(error => {
+            loginBtn.disabled = false;
+            alert("Firebase login failed: " + error.message);
+          });
+      } else {
+        alert("Invalid email or password.");
+      }
+    }
+
+    loginBtn.addEventListener("click", doLogin);
+    ["email", "password"].forEach(id => {
+      document.getElementById(id).addEventListener("keydown", e => {
+        if (e.key === "Enter") doLogin();
+      });
+    });
+
+    function startRelayControl() {
+      const db = firebase.database();
+
+      const relays = [
+        { id: 1, path: "relay1" },
+        { id: 2, path: "relay2" },
+        { id: 3, path: "relay3" },
+        { id: 4, path: "relay4" },
+      ];
+
+      const states = {};
+      const summaryText = document.getElementById("summaryText");
+      function updateSummary() {
+        if (Object.keys(states).length < relays.length) return;
+        const onCount = Object.values(states).filter(Boolean).length;
+        summaryText.innerText = onCount + " of " + relays.length + " ON";
+      }
+
+      relays.forEach(relay => {
+        const statusText = document.getElementById(`status${relay.id}`);
+        const toggleButton = document.getElementById(`btn${relay.id}`);
+        const card = document.getElementById(`card${relay.id}`);
+        const relayRef = db.ref("/" + relay.path);
+
+        relayRef.on("value", (snapshot) => {
+          const state = snapshot.val();
+          statusText.innerText = state ? "ON" : "OFF";
+          card.classList.toggle("on", !!state);
+          toggleButton.setAttribute("aria-checked", state ? "true" : "false");
+          states[relay.id] = !!state;
+          updateSummary();
+        });
+
+        toggleButton.onclick = () => {
+          relayRef.get().then(snap => {
+            relayRef.set(!snap.val());
+          });
+        };
+      });
+
+      document.getElementById("allOffBtn").onclick = () => {
+        relays.forEach(relay => {
+          db.ref("/" + relay.path).set(false);
+        });
+      };
+    }
+
+    document.getElementById("logoutBtn").onclick = () => {
+      firebase.auth().signOut()
+        .then(() => {
+          dashboard.style.display = "none";
+          loginForm.style.display = "block";
+          document.getElementById("email").value = "";
+          document.getElementById("password").value = "";
+        })
+        .catch(error => {
+          alert("Logout failed: " + error.message);
+        });
+    };
+  </script>
+</body>
+</html>
